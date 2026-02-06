@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import '../core/theme/app_theme.dart';
 import '../models/tracking_state.dart';
 
-/// Control buttons for tracking operations
 class ControlButtons extends StatelessWidget {
   final TrackingState state;
   final GlobalKey mapKey;
   final VoidCallback onStartRecording;
-  final VoidCallback onStopRecording;
+  final VoidCallback onPauseRecording;
+  final VoidCallback onResumeRecording;
+  final VoidCallback onEndWalk;
   final VoidCallback onAddMarker;
 
   const ControlButtons({
@@ -14,163 +16,113 @@ class ControlButtons extends StatelessWidget {
     required this.state,
     required this.mapKey,
     required this.onStartRecording,
-    required this.onStopRecording,
+    required this.onPauseRecording,
+    required this.onResumeRecording,
+    required this.onEndWalk,
     required this.onAddMarker,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (!state.isRecording && !state.isPaused) {
+      return _buildStartButton();
+    }
+
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.all(AppTheme.spacingM),
+      decoration: AppTheme.cardDecoration,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Start/Stop Button
-          _buildMainButton(),
+          Expanded(
+            child: _buildControlButton(
+              onPressed: state.isPaused ? onResumeRecording : onPauseRecording,
+              icon: state.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+              label: state.isPaused ? 'Resume' : 'Pause',
+              backgroundColor: AppTheme.primaryPurple,
+            ),
+          ),
 
-          // Marker Button
-          _buildMarkerButton(),
+          const SizedBox(width: AppTheme.spacingM),
+
+          Expanded(
+            child: _buildControlButton(
+              onPressed: onEndWalk,
+              icon: Icons.stop_rounded,
+              label: 'End Walk',
+              backgroundColor: AppTheme.errorRed,
+            ),
+          ),
+
+          const SizedBox(width: AppTheme.spacingM),
+
+          _buildIconButton(
+            onPressed: state.canAddMarker ? onAddMarker : null,
+            icon: Icons.add_location_rounded,
+            enabled: state.canAddMarker,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMainButton() {
-    return Expanded(
-      flex: 2,
-      child: _AnimatedButton(
-        onPressed: state.isRecording ? onStopRecording : onStartRecording,
-        backgroundColor: state.isRecording
-            ? const Color(0xFFFF6B6B)
-            : const Color(0xFF6B7FFF),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              state.isRecording ? Icons.stop_rounded : Icons.play_arrow_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              state.isRecording ? 'Stop' : 'Start',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMarkerButton() {
-    final bool isEnabled = state.isRecording && state.pathPoints.isNotEmpty;
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 12),
-      child: _AnimatedButton(
-        onPressed: isEnabled ? onAddMarker : null,
-        backgroundColor: isEnabled
-            ? const Color(0xFFFF9F6B)
-            : const Color(0xFFE0E0E0),
-        child: Icon(
-          Icons.add_location_rounded,
-          color: isEnabled ? Colors.white : const Color(0xFFBDBDBD),
-          size: 28,
-        ),
-      ),
-    );
-  }
-}
-
-/// Animated button with press effect
-class _AnimatedButton extends StatefulWidget {
-  final VoidCallback? onPressed;
-  final Widget child;
-  final Color backgroundColor;
-
-  const _AnimatedButton({
-    required this.onPressed,
-    required this.child,
-    required this.backgroundColor,
-  });
-
-  @override
-  State<_AnimatedButton> createState() => _AnimatedButtonState();
-}
-
-class _AnimatedButtonState extends State<_AnimatedButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 100),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: widget.onPressed != null
-          ? (_) => _controller.forward()
-          : null,
-      onTapUp: widget.onPressed != null
-          ? (_) {
-              _controller.reverse();
-              widget.onPressed?.call();
-            }
-          : null,
-      onTapCancel: widget.onPressed != null
-          ? () => _controller.reverse()
-          : null,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: widget.backgroundColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: widget.onPressed != null
-                ? [
-                    BoxShadow(
-                      color: widget.backgroundColor.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
+  Widget _buildStartButton() {
+    return Container(
+      width: double.infinity,
+      decoration: AppTheme.cardDecoration,
+      child: ElevatedButton.icon(
+        onPressed: onStartRecording,
+        icon: const Icon(Icons.play_arrow_rounded, size: 28),
+        label: const Text('Start walking'),
+        style: AppTheme.largePrimaryButton.copyWith(
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(vertical: 20),
           ),
-          child: Center(child: widget.child),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControlButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    required String label,
+    required Color backgroundColor,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 24),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: backgroundColor,
+        foregroundColor: AppTheme.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusM),
+        ),
+        elevation: 0,
+      ),
+    );
+  }
+
+  Widget _buildIconButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required bool enabled,
+  }) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: enabled
+            ? AppTheme.primaryPurple.withValues(alpha:0.1)
+            : AppTheme.dividerColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusM),
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(
+          icon,
+          color: enabled ? AppTheme.primaryPurple : AppTheme.textGrey,
         ),
       ),
     );

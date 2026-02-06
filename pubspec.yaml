@@ -23,6 +23,16 @@ dependencies:
   # File System
   path_provider: ^2.1.2
   
+  # Storage
+  shared_preferences: ^2.2.2
+  
+  # Screenshots
+  screenshot: ^2.1.0
+
+  # Screen recording
+  flutter_screen_recording: ^2.0.23
+  video_player: ^2.8.2
+  
   # UI
   cupertino_icons: ^1.0.2
 

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:gps_tracker_app/models/tracking_state.dart';
+import '../core/theme/app_theme.dart';
 import '../providers/providers.dart';
 import '../widgets/control_buttons.dart';
 import '../widgets/info_overlay.dart';
+import '../widgets/gps_status_indicator.dart';
+import '../widgets/permission_overlay.dart';
+import '../widgets/recovery_dialog.dart';
+import '../widgets/countdown_overlay.dart';
+import '../widgets/walk_completed_dialog.dart';
 
-/// Main tracking screen with map and controls
 class TrackingScreen extends ConsumerStatefulWidget {
   const TrackingScreen({super.key});
 
@@ -16,11 +22,12 @@ class TrackingScreen extends ConsumerStatefulWidget {
 class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   GoogleMapController? _mapController;
   final GlobalKey _mapKey = GlobalKey();
+  bool _hasShownRecoveryDialog = false;
+  bool _showingCountdown = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialize tracking controller
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(trackingControllerProvider.notifier).initialize();
     });
@@ -30,23 +37,71 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(trackingControllerProvider);
 
+    if (state.hasRecoveredSession && !_hasShownRecoveryDialog) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showRecoveryDialog(state);
+      });
+    }
+
+    ref.listen<TrackingState>(
+      trackingControllerProvider,
+      (previous, next) {
+        if (next.currentPosition != null &&
+            next.currentPosition != previous?.currentPosition) {
+          _animateToPosition(next.currentPosition!);
+        }
+      },
+    );
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        backgroundColor: AppTheme.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Walking Tracker'),
+      ),
       body: SafeArea(
         child: Stack(
           children: [
-            // Map
             _buildMap(state),
 
-            // Info overlay
+            if (_showingCountdown)
+              CountdownOverlay(
+                onComplete: () {
+                  setState(() => _showingCountdown = false);
+                  _startRecordingAfterCountdown();
+                },
+              ),
+
+            if (state.currentPosition == null && !state.needsPermissionSetup)
+              _buildLocationLoadingOverlay(),
+
+            if (state.needsPermissionSetup)
+              PermissionOverlay(
+                locationServicesDisabled: state.locationServicesDisabled,
+                permissionDenied: state.permissionDenied,
+                onOpenLocationSettings: _handleOpenLocationSettings,
+                onOpenAppSettings: _handleOpenAppSettings,
+              ),
+
+            if (state.currentPosition != null && state.isRecording)
+              Positioned(
+                top: 16,
+                right: 16,
+                child: GpsStatusIndicator(state: state),
+              ),
+
             Positioned(
               top: 16,
-              left: 16,
-              right: 16,
+              left: 0,
+              right: 0,
               child: InfoOverlay(state: state),
             ),
 
-            // Control buttons
             Positioned(
               bottom: 24,
               left: 16,
@@ -55,15 +110,19 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
                 state: state,
                 mapKey: _mapKey,
                 onStartRecording: _handleStartRecording,
-                onStopRecording: _handleStopRecording,
+                onPauseRecording: _handlePauseRecording,
+                onResumeRecording: _handleResumeRecording,
+                onEndWalk: _handleEndWalk,
                 onAddMarker: _handleAddMarker,
               ),
             ),
 
-            // Error snackbar
-            if (state.errorMessage != null) _buildErrorBar(state.errorMessage!),
+            if (state.warningMessage != null && !state.needsPermissionSetup)
+              _buildWarningBanner(state.warningMessage!),
 
-            // Processing indicator
+            if (state.errorMessage != null && !state.needsPermissionSetup)
+              _buildErrorBar(state.errorMessage!),
+
             if (state.isProcessing) _buildProcessingIndicator(),
           ],
         ),
@@ -71,7 +130,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
     );
   }
 
-  Widget _buildMap(state) {
+  Widget _buildMap(TrackingState state) {
     return RepaintBoundary(
       key: _mapKey,
       child: ClipRRect(
@@ -79,7 +138,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
         child: GoogleMap(
           initialCameraPosition: CameraPosition(
             target: state.currentPosition ??
-                const LatLng(37.7749, -122.4194), // Default: San Francisco
+                const LatLng(3.0291183, 101.7105917),
             zoom: 15,
           ),
           myLocationEnabled: true,
@@ -90,31 +149,105 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
           markers: state.mapMarkers,
           onMapCreated: (controller) {
             _mapController = controller;
+            _applyMapStyle(controller);
             if (state.currentPosition != null) {
               _animateToPosition(state.currentPosition!);
             }
           },
-          style: _mapStyle,
         ),
       ),
     );
   }
 
-  Widget _buildErrorBar(String message) {
+  Widget _buildLocationLoadingOverlay() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 1500),
+              builder: (context, value, child) {
+                return Transform.scale(
+                  scale: 0.8 + (value * 0.2),
+                  child: Opacity(
+                    opacity: 0.5 + (value * 0.5),
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryPurple.withValues(alpha:0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.my_location,
+                        size: 40,
+                        color: AppTheme.primaryPurple,
+                      ),
+                    ),
+                  ),
+                );
+              },
+              onEnd: () {
+                if (mounted) setState(() {});
+              },
+            ),
+            const SizedBox(height: 24),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryPurple),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Getting your location...',
+              style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please wait while we locate you',
+              style: AppTheme.bodyMedium.copyWith(color: AppTheme.textLight),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyMapStyle(GoogleMapController controller) async {
+    try {
+      await controller.setMapStyle(_mapStyle);
+    } catch (e) {
+      // Ignore map style errors
+    }
+  }
+
+  Widget _buildWarningBanner(String message) {
     return Positioned(
-      top: 16,
+      top: 80,
       left: 16,
       right: 16,
       child: Material(
         color: Colors.transparent,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.spacingM,
+            vertical: AppTheme.spacingS,
+          ),
           decoration: BoxDecoration(
-            color: const Color(0xFFFF6B6B),
-            borderRadius: BorderRadius.circular(12),
+            color: AppTheme.warningOrange,
+            borderRadius: BorderRadius.circular(AppTheme.radiusM),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
+                color: Colors.black.withValues(alpha:0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -122,20 +255,71 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.error_outline, color: Colors.white, size: 20),
+              const Icon(Icons.warning_amber_rounded,
+                  color: AppTheme.white, size: 20),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   message,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.white,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                icon: const Icon(Icons.close, color: AppTheme.white, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  ref.read(trackingControllerProvider.notifier).clearWarning();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorBar(String message) {
+    return Positioned(
+      top: 80,
+      left: 16,
+      right: 16,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.spacingM,
+            vertical: AppTheme.spacingS,
+          ),
+          decoration: BoxDecoration(
+            color: AppTheme.errorRed,
+            borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha:0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline, color: AppTheme.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: AppTheme.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: AppTheme.white, size: 20),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onPressed: () {
@@ -152,9 +336,22 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   Widget _buildProcessingIndicator() {
     return Container(
       color: Colors.black26,
-      child: const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6B7FFF)),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryPurple),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Processing...',
+              style: AppTheme.bodyLarge.copyWith(
+                color: AppTheme.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -162,38 +359,125 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
   void _animateToPosition(LatLng position) {
     _mapController?.animateCamera(
-      CameraUpdate.newLatLng(position),
+      CameraUpdate.newLatLngZoom(position, 17),
     );
   }
 
-  void _handleStartRecording() async {
+  Future<void> _handleStartRecording() async {
+    setState(() => _showingCountdown = true);
+  }
+
+  Future<void> _startRecordingAfterCountdown() async {
     await ref.read(trackingControllerProvider.notifier).startRecording();
   }
 
-  void _handleStopRecording() async {
+  void _handlePauseRecording() {
+    ref.read(trackingControllerProvider.notifier).pauseRecording();
+  }
+
+  Future<void> _handleResumeRecording() async {
+    await ref.read(trackingControllerProvider.notifier).resumeRecording();
+  }
+
+  Future<void> _handleEndWalk() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: AppTheme.dialogShape,
+        title: const Text('Confirm end walk?', style: AppTheme.dialogTitle),
+        content: const Text(
+          'By proceeding, your walk will be marked as done.',
+          style: AppTheme.dialogContent,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: AppTheme.textButton,
+            child: const Text('Back to Walk'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: AppTheme.dangerButton,
+            child: const Text('End Walk'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _stopAndShowResults();
+    }
+  }
+
+  Future<void> _stopAndShowResults() async {
+    final state = ref.read(trackingControllerProvider);
+    final duration = state.recordingDuration ?? Duration.zero;
+    final distanceKm = state.totalDistance / 1000;
+
     final path = await ref
         .read(trackingControllerProvider.notifier)
         .stopRecording(mapKey: _mapKey);
 
-    if (path != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Screenshot saved: $path'),
-          backgroundColor: const Color(0xFF4CAF50),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-    }
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WalkCompletedDialog(
+        duration: duration,
+        distanceKm: distanceKm,
+        onDone: () {
+          Navigator.pop(context);
+          Navigator.pop(context);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            AppTheme.successSnackbar(
+              'Successfully saved screenshot and recording. You can view it in walking history.',
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _handleAddMarker() {
     ref.read(trackingControllerProvider.notifier).addMarker();
   }
 
-  // Minimalist map style
+  void _handleOpenLocationSettings() {
+    ref.read(trackingControllerProvider.notifier).openLocationSettings();
+  }
+
+  void _handleOpenAppSettings() {
+    ref.read(trackingControllerProvider.notifier).openAppSettings();
+  }
+
+  void _showRecoveryDialog(TrackingState state) {
+    if (!mounted) return;
+    _hasShownRecoveryDialog = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => RecoveryDialog(
+        pointsCount: state.pathPoints.length,
+        markersCount: state.markers.length,
+        distance: state.totalDistance,
+        onRestore: () => Navigator.of(context).pop(),
+        onDiscard: () {
+          ref.read(trackingControllerProvider.notifier).clearData();
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
   static const String _mapStyle = '''
   [
     {

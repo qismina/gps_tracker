@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/theme/app_theme.dart';
 import '../models/tracking_state.dart';
 
-/// Info overlay showing tracking statistics
 class InfoOverlay extends StatelessWidget {
   final TrackingState state;
 
@@ -12,116 +12,145 @@ class InfoOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!state.isRecording && !state.hasData) {
+    if (!state.isRecording && !state.hasData && !state.isPaused) {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 2),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: 320,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.spacingXL,
+            vertical: AppTheme.spacingM,
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Recording indicator
-          if (state.isRecording) _buildRecordingIndicator(),
-
-          // Statistics
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          decoration: AppTheme.cardDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _buildStatItem(
-                icon: Icons.route_rounded,
-                label: 'Points',
-                value: state.pathPoints.length.toString(),
+              if (state.isRecording || state.isPaused) ...[
+                _buildStatusIndicator(),
+                const SizedBox(height: AppTheme.spacingS),
+              ],
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  if (state.recordingDuration != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.timer_rounded,
+                          color: AppTheme.primaryPurple,
+                          size: 20,
+                        ),
+                        const SizedBox(width: AppTheme.spacingS),
+                        Text(
+                          _formatDuration(state.recordingDuration!),
+                          style: AppTheme.sectionHeader.copyWith(
+                            color: AppTheme.primaryPurple,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.straighten_rounded,
+                        color: AppTheme.primaryPurple,
+                        size: 20,
+                      ),
+                      const SizedBox(width: AppTheme.spacingS),
+                      Text(
+                        _formatDistance(state.totalDistance),
+                        style: AppTheme.sectionHeader.copyWith(
+                          color: AppTheme.primaryPurple,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              _buildDivider(),
-              _buildStatItem(
-                icon: Icons.location_on_rounded,
-                label: 'Markers',
-                value: state.markers.length.toString(),
-              ),
+
+              if (state.currentSpeed != null && state.currentSpeed! > 0) ...[
+                const SizedBox(height: AppTheme.spacingS),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.speed_rounded,
+                      color: AppTheme.primaryPurple,
+                      size: 16,
+                    ),
+                    const SizedBox(width: AppTheme.spacingS),
+                    Text(
+                      '${_formatSpeed(state.currentSpeed!)} km/h',
+                      style: AppTheme.bodySmall.copyWith(
+                        color: AppTheme.primaryPurple,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildRecordingIndicator() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PulsingDot(),
-          const SizedBox(width: 8),
-          const Text(
-            'Recording',
-            style: TextStyle(
-              color: Color(0xFF6B7FFF),
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Column(
+  Widget _buildStatusIndicator() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          color: const Color(0xFF6B7FFF),
-          size: 24,
-        ),
-        const SizedBox(height: 4),
+        if (!state.isPaused) _PulsingDot(),
+        if (!state.isPaused) const SizedBox(width: AppTheme.spacingS),
         Text(
-          value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2D3748),
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
+          state.isPaused ? 'Paused' : 'Recording',
+          style: AppTheme.bodySmall.copyWith(
+            color: state.isPaused ? AppTheme.warningOrange : AppTheme.primaryPurple,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDivider() {
-    return Container(
-      height: 40,
-      width: 1,
-      color: Colors.grey[300],
-    );
+  String _formatDistance(double meters) {
+    final km = meters / 1000;
+    return '${km.toStringAsFixed(2)} km';
+  }
+
+  String _formatSpeed(double speedMps) {
+    final speedKmh = speedMps * 3.6;
+    return speedKmh.toStringAsFixed(1);
+  }
+
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+
+    final h = hours.toString().padLeft(2, '0');
+    final m = minutes.toString().padLeft(2, '0');
+    final s = seconds.toString().padLeft(2, '0');
+
+    if (hours > 0) {
+      return '$h:$m:$s';
+    } else {
+      return '$m:$s';
+    }
   }
 }
 
-/// Pulsing dot animation for recording indicator
 class _PulsingDot extends StatefulWidget {
   @override
   State<_PulsingDot> createState() => _PulsingDotState();
@@ -156,10 +185,10 @@ class _PulsingDotState extends State<_PulsingDot>
     return FadeTransition(
       opacity: _animation,
       child: Container(
-        width: 10,
-        height: 10,
+        width: 8,
+        height: 8,
         decoration: const BoxDecoration(
-          color: Color(0xFFFF6B6B),
+          color: AppTheme.primaryPurple,
           shape: BoxShape.circle,
         ),
       ),
