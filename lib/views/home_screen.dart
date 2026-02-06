@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_theme.dart';
 import 'tracking_screen.dart';
 import 'walking_history_screen.dart';
+import 'feed_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -12,33 +13,41 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppTheme.spacingXXL),
-              
-              const Text(
-                'Walking Tracker',
-                style: AppTheme.appTitle,
-              ),
-              
-              const SizedBox(height: AppTheme.spacingS),
-              
-              Text(
-                'Track your walks and view your journey history',
-                style: AppTheme.bodyLarge.copyWith(color: AppTheme.textLight),
-              ),
-              
-              const SizedBox(height: AppTheme.spacingXXL),
-              
-              _buildStartWalkingCard(context),
-              
-              const SizedBox(height: AppTheme.spacingL),
-              
-              _buildWalkingHistoryCard(context),
-            ],
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingL),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: AppTheme.spacingXXL),
+                
+                const Text(
+                  'Walking Tracker',
+                  style: AppTheme.appTitle,
+                ),
+                
+                const SizedBox(height: AppTheme.spacingS),
+                
+                Text(
+                  'Track your walks and view your journey history',
+                  style: AppTheme.bodyLarge.copyWith(color: AppTheme.textLight),
+                ),
+                
+                const SizedBox(height: AppTheme.spacingXXL),
+                
+                _buildStartWalkingCard(context),
+                
+                const SizedBox(height: AppTheme.spacingL),
+                
+                _buildWalkingHistoryCard(context),
+                
+                const SizedBox(height: AppTheme.spacingL),
+                
+                _buildMediaFeedCard(context),
+                
+                const SizedBox(height: AppTheme.spacingL),
+              ],
+            ),
           ),
         ),
       ),
@@ -81,18 +90,21 @@ class HomeScreen extends ConsumerWidget {
                 
                 const SizedBox(height: AppTheme.spacingL),
                 
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TrackingScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start walking'),
-                  style: AppTheme.largePrimaryButton,
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TrackingScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Start walking'),
+                    style: AppTheme.largePrimaryButton,
+                  ),
                 ),
                 
                 const SizedBox(height: AppTheme.spacingM),
@@ -100,6 +112,7 @@ class HomeScreen extends ConsumerWidget {
                 const Text(
                   'Begin tracking your walk',
                   style: AppTheme.bodySmall,
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -135,6 +148,41 @@ class HomeScreen extends ConsumerWidget {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const WalkingHistoryScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMediaFeedCard(BuildContext context) {
+    return Container(
+      decoration: AppTheme.cardDecoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(AppTheme.spacingL),
+            child: Text(
+              'Media Feed',
+              style: AppTheme.sectionHeader,
+            ),
+          ),
+          
+          const Divider(height: 1),
+          
+          _buildHistoryOption(
+            context: context,
+            icon: Icons.feed_rounded,
+            title: 'View Feed',
+            description: 'Browse infinite scroll media feed',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const FeedScreen(),
                 ),
               );
             },
@@ -184,10 +232,14 @@ class HomeScreen extends ConsumerWidget {
                     Text(
                       description,
                       style: AppTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
+              
+              const SizedBox(width: AppTheme.spacingS),
               
               const Icon(
                 Icons.arrow_forward_ios_rounded,

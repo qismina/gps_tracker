@@ -26,7 +26,7 @@ class ScreenshotsTab extends ConsumerWidget {
           data: (sessions) =>
               _buildScreenshotList(context, ref, screenshots, sessions),
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => _buildScreenshotList(context, ref, screenshots, []),
+          error: (_, _) => _buildScreenshotList(context, ref, screenshots, []),
         );
       },
       loading: () => const Center(

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/tracking_controller.dart';
+import '../controllers/feed_controller.dart';
 import '../models/tracking_state.dart';
 import '../models/walk_session.dart';
 import '../services/location_service.dart';
@@ -53,3 +54,8 @@ final walkSessionsProvider = FutureProvider<List<WalkSession>>((ref) async {
 });
 
 final sessionsRefreshProvider = StateProvider<int>((ref) => 0);
+
+// Feed Controller Provider
+final feedControllerProvider = ChangeNotifierProvider<FeedController>((ref) {
+  return FeedController();
+});

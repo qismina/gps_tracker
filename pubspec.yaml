@@ -1,10 +1,10 @@
 name: gps_tracker_app
-description: A minimalist GPS tracker with path recording and screenshot capabilities
+description: A minimalist GPS tracker with path recording, screenshot capabilities, and media feed
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ^3.10.8
 
 dependencies:
   flutter:
@@ -12,6 +12,7 @@ dependencies:
   
   # State Management
   flutter_riverpod: ^2.5.1
+  provider: ^6.1.1
   
   # Google Maps
   google_maps_flutter: ^2.5.0
@@ -20,26 +21,28 @@ dependencies:
   geolocator: ^10.1.0
   permission_handler: ^11.0.1
   
-  # File System
-  path_provider: ^2.1.2
+  # HTTP Client
+  http: ^1.1.0
   
-  # Storage
+  # File System & Storage
+  path_provider: ^2.1.2
   shared_preferences: ^2.2.2
   
-  # Screenshots
+  # Screenshots & Recording
   screenshot: ^2.1.0
-
-  # Screen recording
   flutter_screen_recording: ^2.0.23
   video_player: ^2.8.2
   
+  # Image Caching
+  cached_network_image: ^3.3.0
+  
   # UI
-  cupertino_icons: ^1.0.2
+  cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
