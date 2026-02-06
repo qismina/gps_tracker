@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// App theme configuration with colors, text styles, and component themes.
 class AppTheme {
   AppTheme._();
 
@@ -197,7 +196,7 @@ class AppTheme {
     textStyle: buttonText,
   );
   
-  // Card Styles - Enhanced floating effect
+  // Card Styles 
   static BoxDecoration cardDecoration = BoxDecoration(
     color: cardBackground,
     borderRadius: BorderRadius.circular(20),
